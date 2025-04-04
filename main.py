@@ -22,7 +22,7 @@ PERGUNTAS = [
         "Que horas são agora? (hh:mm)"
     ]),
     ("☀️ Rotina e Autodisciplina", [
-        "Acordei na hora que eu planejei?",
+        "Acordei na hora que planejei?",
         "Como me senti ao acordar? (corpo, mente, emoção)",
         "Quantas horas de sono eu tive?",
         "Fiz alguma atividade para cuidar do meu corpo (alongamento, água, higiene, treino)?",
@@ -65,13 +65,6 @@ PERGUNTAS = [
         "O que poderia ter sido feito de forma diferente?",
         "O que aprendi hoje sobre mim mesmo?",
         "De 0 a 10, que nota dou ao meu dia?"
-    ]),
-    ("✍️ Reflexão Escrita (no caderno)", [
-        "Com base nas tuas respostas de hoje, responde agora no teu caderno:",
-        "1. O que mais me surpreendeu nas minhas respostas de hoje?",
-        "2. Em que estou a melhorar e em que estou a falhar?",
-        "3. Como posso começar melhor o meu dia amanhã?",
-        "4. O que Deus me inspirou a perceber hoje?"
     ])
 ]
 
@@ -80,7 +73,7 @@ user_data = {}
 
 # Mensagem de introdução ao bot
 INTRO_MSG = """
-👋 Olá! Eu sou o Aurora Bot, o seu assistente para reflexão diária. 
+👋 Olá! Eu sou o Aurora Bot, o seu assistente para reflexão diária criada por Nicolau Alfredo. 
 Eu ajudo a organizar as suas reflexões, ajudar no autodesenvolvimento e enviar resumos por email.
 
 📝 O que faço:
@@ -88,8 +81,7 @@ Eu ajudo a organizar as suas reflexões, ajudar no autodesenvolvimento e enviar 
 2. No final de cada reflexão, envio um resumo das suas respostas diretamente para o seu email.
 
 🎯 Comandos:
-- /refletir: Comece o seu processo de reflexão diária.
-- /ajuda: Se precisar de ajuda sobre como usar o bot, digite esse comando.
+- /refletir: Comece o seu processo de reflexão diária. 
 
 🧭 Como funciona:
 - Responda às perguntas com sinceridade e atenção. 
@@ -119,6 +111,18 @@ async def enviar_proxima_pergunta(update, context):
         # Enviou todas as perguntas
         await update.message.reply_text("✅ Obrigado por responderes. Estou a enviar o teu resumo por email.")
         enviar_email(user_id)
+        
+        # Adicionar reflexão escrita antes da conclusão final
+        reflexao_msg = """
+        ✍️ Reflexão Escrita (no caderno):
+        Com base nas tuas respostas de hoje, responde agora no teu caderno:
+        
+        1. O que mais me surpreendeu nas minhas respostas de hoje?
+        2. Em que estou a melhorar e em que estou a falhar?
+        3. Como posso começar melhor o meu dia amanhã?
+        4. O que Deus me inspirou a perceber hoje?
+        """
+        await update.message.reply_text(reflexao_msg)
         return
 
     categoria, perguntas = PERGUNTAS[dados["categoria_idx"]]
