@@ -1,42 +1,28 @@
-# Aurora Bot - Reflexão Diária e Desenvolvimento Pessoal
+# 🤖 Aurora - Bot de Reflexão Diária
 
-**Aurora** é um bot do Telegram criado para ajudar a cultivar bons hábitos diários e incentivar a reflexão pessoal. Através de uma série de perguntas diárias organizadas em categorias como rotina, objetivos, espiritualidade e mais, o bot permite que você faça uma autoavaliação do seu dia e se conecte consigo mesmo para melhorar continuamente.
+[![Licença MIT](https://img.shields.io/badge/Licença-MIT-green.svg)](LICENSE)
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-## Funcionalidades
+O Aurora é um bot inteligente para Telegram que guia usuários através de um processo estruturado de reflexão diária, ajudando no autodesenvolvimento e autoconhecimento.
 
-- Envio automático de perguntas todos os dias às 21:00.
-- Perguntas divididas em categorias como:
-  - **Rotina**
-  - **Objetivos**
-  - **Aperfeiçoamento Pessoal**
-  - **Espiritualidade**
-  - **Atitude e Valores**
-  - **Foco e Motivação**
-  - **Reflexão Escrita**
-  - **Autoavaliação do Dia**
-- Permite que o usuário registre suas respostas e receba um e-mail com um resumo diário.
-- Comece a reflexão manualmente a qualquer momento com o comando `/refletir`.
-- Respostas enviadas por e-mail ao final do ciclo diário.
+## ✨ Funcionalidades Principais
 
-## Tecnologias Utilizadas
+- 🧠 Questionário inteligente com 8 categorias de reflexão
+- 📄 Geração automática de relatório em TXT com todas as respostas
+- ⏳ Auto-limpeza das mensagens após 2 horas (para privacidade)
+- 💾 Sistema de persistência usando SQLite
+- 🔄 Progresso salvo mesmo se o bot reiniciar
 
-- **Telegram Bot API**
-- **Python 3.x**
-- **python-telegram-bot**
-- **apscheduler** para agendamento de envio diário de perguntas
-- **yagmail** para envio de e-mails com o resumo das respostas
-- **dotenv** para variáveis de ambiente
+## 📦 Pré-requisitos
 
-## Instalação
+- Python 3.8 ou superior
+- Conta no Telegram
+- Token de bot do Telegram (obtido com [@BotFather](https://t.me/BotFather))
 
-### Pré-requisitos
-
-1. [Instalar Python 3.x](https://www.python.org/downloads/)
-2. Instalar `pip` (gerenciador de pacotes do Python)
-
-### Passos para Instalação
+## 🚀 Instalação
 
 1. Clone o repositório:
-
-   ```bash
-   git clone https://github.com/seu-usuario/aurora-bot.git
+```bash
+git clone https://github.com/seu-usuario/aurora-bot.git
+cd aurora-bot
