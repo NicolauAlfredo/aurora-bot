@@ -4,8 +4,6 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 import yagmail
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.daily import DailyTrigger
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -142,20 +140,6 @@ def enviar_email(user_id):
         subject="📩 Reflexão Diária - Aurora Bot",
         contents=[corpo]
     )
-
-# Agendamento das perguntas diárias às 21:00
-scheduler = AsyncIOScheduler()
-
-async def enviar_perguntas_diarias(context):
-    for user_id in user_data:
-        user_data[user_id]["categoria_idx"] = 0
-        user_data[user_id]["pergunta_idx"] = 0
-        # Enviar as primeiras perguntas automaticamente
-        await enviar_proxima_pergunta(context.update, context)
-
-# Agendar para todos os dias às 21:00
-scheduler.add_job(enviar_perguntas_diarias, DailyTrigger(hour=21, minute=0, second=0))
-scheduler.start()
 
 # Inicializar bot
 def main():
