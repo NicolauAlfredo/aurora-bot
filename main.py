@@ -1,26 +1,47 @@
 import os
 import logging
+import sqlite3
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-import yagmail
 
-# Carregar variáveis de ambiente
+# Configuração inicial
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-GMAIL_USER = os.getenv("GMAIL_USER")
-GMAIL_PASS = os.getenv("GMAIL_PASSWORD")
-EMAIL_DESTINO = os.getenv("EMAIL_DESTINO")
+DB_NAME = "reflexao_bot.db"
 
-# Ativar logs
-logging.basicConfig(level=logging.INFO)
+# Setup do banco de dados
+def setup_database():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS messages (
+        user_id INTEGER,
+        chat_id INTEGER,
+        message_id INTEGER,
+        timestamp DATETIME,
+        PRIMARY KEY (user_id, message_id)
+    )
+    ''')
+    
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        user_id INTEGER PRIMARY KEY,
+        respostas TEXT,
+        categoria_idx INTEGER,
+        pergunta_idx INTEGER
+    )
+    ''')
+    
+    conn.commit()
+    conn.close()
 
-# Categorias e perguntas
+setup_database()
+
+# Perguntas (mantidas as mesmas do código original)
 PERGUNTAS = [
-    ("📅 Data e Hora", [
-        "Qual a data de hoje? (dd/mm/aaaa)",
-        "Que horas são agora? (hh:mm)"
-    ]),
     ("☀️ Rotina e Autodisciplina", [
         "Acordei na hora que planejei?",
         "Como me senti ao acordar? (corpo, mente, emoção)",
@@ -68,10 +89,6 @@ PERGUNTAS = [
     ])
 ]
 
-# Dicionário para armazenar estado do utilizador
-user_data = {}
-
-# Mensagem de introdução ao bot
 INTRO_MSG = """
 👋 Olá! Eu sou o Aurora Bot, o seu assistente para reflexão diária criada por Nicolau Alfredo. 
 Eu ajudo a organizar as suas reflexões, ajudar no autodesenvolvimento e enviar resumos por email.
@@ -86,95 +103,185 @@ Eu ajudo a organizar as suas reflexões, ajudar no autodesenvolvimento e enviar 
 🧭 Como funciona:
 - Responda às perguntas com sinceridade e atenção. 
 - Após completar as perguntas de reflexão, você receberá um resumo por email e orientações finais para reflexão escrita no seu caderno.
+
+⚠️ Por motivos de privacidade, esta conversa será automaticamente eliminada após 2 horas.
+Recomendo que faça download do documento gerado ao final.
 """
 
-# Início do comando /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Enviar mensagem de introdução
-    await update.message.reply_text(INTRO_MSG)
+# Funções de banco de dados
+def save_message(user_id: int, chat_id: int, message_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO messages VALUES (?, ?, ?, datetime('now'))",
+        (user_id, chat_id, message_id)
+    )
+    conn.commit()
+    conn.close()
 
-# Início do comando /refletir
+def get_user_messages(user_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT chat_id, message_id FROM messages WHERE user_id = ?",
+        (user_id,)
+    )
+    messages = cursor.fetchall()
+    conn.close()
+    return messages
+
+def clean_old_messages():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM messages WHERE timestamp < datetime('now', '-48 hours')"
+    )
+    conn.commit()
+    conn.close()
+
+# Funções principais do bot
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(INTRO_MSG)
+    save_message(update.effective_user.id, update.message.chat_id, update.message.message_id)
+
 async def start_reflexao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    user_data[user_id] = {
-        "respostas": [],
-        "categoria_idx": 0,
-        "pergunta_idx": 0
-    }
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "INSERT OR REPLACE INTO user_sessions VALUES (?, ?, ?, ?)",
+        (user_id, "[]", 0, 0)
+    )
+    conn.commit()
+    conn.close()
+    
     await enviar_proxima_pergunta(update, context)
+    save_message(user_id, update.message.chat_id, update.message.message_id)
 
-async def enviar_proxima_pergunta(update, context):
+async def enviar_proxima_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    dados = user_data[user_id]
-
-    if dados["categoria_idx"] >= len(PERGUNTAS):
-        # Enviou todas as perguntas
-        await update.message.reply_text("✅ Obrigado por responderes. Estou a enviar o teu resumo por email.")
-        enviar_email(user_id)
-        
-        # Adicionar reflexão escrita antes da conclusão final
-        reflexao_msg = """
-        ✍️ Reflexão Escrita (no caderno):
-        Com base nas tuas respostas de hoje, responde agora no teu caderno:
-        
-        1. O que mais me surpreendeu nas minhas respostas de hoje?
-        2. Em que estou a melhorar e em que estou a falhar?
-        3. Como posso começar melhor o meu dia amanhã?
-        4. O que Deus me inspirou a perceber hoje?
-        """
-        await update.message.reply_text(reflexao_msg)
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "SELECT respostas, categoria_idx, pergunta_idx FROM user_sessions WHERE user_id = ?",
+        (user_id,)
+    )
+    dados = cursor.fetchone()
+    
+    if dados[1] >= len(PERGUNTAS):
+        await finalizar_reflexao(update, context, dados[0])
         return
-
-    categoria, perguntas = PERGUNTAS[dados["categoria_idx"]]
-    if dados["pergunta_idx"] == 0:
-        await update.message.reply_text(f"🧭 *{categoria}*", parse_mode="Markdown")
-
-    pergunta_atual = perguntas[dados["pergunta_idx"]]
-    await update.message.reply_text(pergunta_atual)
+    
+    categoria, perguntas = PERGUNTAS[dados[1]]
+    if dados[2] == 0:
+        msg = await update.message.reply_text(f"🧭 *{categoria}*", parse_mode="Markdown")
+        save_message(user_id, update.message.chat_id, msg.message_id)
+    
+    pergunta_atual = perguntas[dados[2]]
+    msg = await update.message.reply_text(pergunta_atual)
+    save_message(user_id, update.message.chat_id, msg.message_id)
 
 async def receber_resposta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
-    if user_id not in user_data:
-        await update.message.reply_text("Escreve /refletir para começar.")
-        return
-
-    dados = user_data[user_id]
-    categoria, perguntas = PERGUNTAS[dados["categoria_idx"]]
-
-    dados["respostas"].append((categoria, perguntas[dados["pergunta_idx"]], update.message.text))
-
-    # Avançar para próxima pergunta
-    dados["pergunta_idx"] += 1
-    if dados["pergunta_idx"] >= len(perguntas):
-        dados["categoria_idx"] += 1
-        dados["pergunta_idx"] = 0
-
+    save_message(user_id, update.message.chat_id, update.message.message_id)
+    
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "SELECT respostas, categoria_idx, pergunta_idx FROM user_sessions WHERE user_id = ?",
+        (user_id,)
+    )
+    dados = list(cursor.fetchone())
+    
+    categoria, perguntas = PERGUNTAS[dados[1]]
+    respostas = eval(dados[0])
+    respostas.append((categoria, perguntas[dados[2]], update.message.text))
+    
+    dados[2] += 1
+    if dados[2] >= len(perguntas):
+        dados[1] += 1
+        dados[2] = 0
+    
+    cursor.execute(
+        "UPDATE user_sessions SET respostas = ?, categoria_idx = ?, pergunta_idx = ? WHERE user_id = ?",
+        (str(respostas), dados[1], dados[2], user_id)
+    )
+    conn.commit()
+    conn.close()
+    
     await enviar_proxima_pergunta(update, context)
 
-def enviar_email(user_id):
-    dados = user_data[user_id]
-    yag = yagmail.SMTP(GMAIL_USER, GMAIL_PASS)
+async def finalizar_reflexao(update: Update, context: ContextTypes.DEFAULT_TYPE, respostas_str: str):
+    respostas = eval(respostas_str)
+    now = datetime.now()
+    nome_arquivo = f"reflexao_{now.strftime('%Y%m%d_%H%M%S')}.txt"
+    
+    with open(nome_arquivo, "w", encoding="utf-8") as arquivo:
+        arquivo.write(f"📝 Reflexão Diária - {now.strftime('%d/%m/%Y %H:%M')}\n\n")
+        for cat, pergunta, resposta in respostas:
+            arquivo.write(f"📌 {cat}\n")
+            arquivo.write(f"- {pergunta}\n")
+            arquivo.write(f"  ✍️ {resposta}\n\n")
+    
+    with open(nome_arquivo, "rb") as arquivo:
+        msg = await update.message.reply_document(
+            document=arquivo,
+            caption=f"📄 Seu documento de reflexão ({now.strftime('%d/%m/%Y %H:%M')})"
+        )
+        save_message(update.effective_user.id, update.message.chat_id, msg.message_id)
+    
+    os.remove(nome_arquivo)
+    
+    reflexao_msg = """
+    ✍️ Reflexão Escrita (no caderno):
+    1. O que mais me surpreendeu nas minhas respostas?
+    2. Em que estou melhorando e em que estou falhando?
+    3. Como posso melhorar amanhã?
+    4. O que Deus me inspirou a perceber hoje?
+    """
+    msg = await update.message.reply_text(reflexao_msg)
+    save_message(update.effective_user.id, update.message.chat_id, msg.message_id)
+    
+    # Agendar limpeza
+    await schedule_cleanup(context, update.effective_user.id)
 
-    corpo = "📝 Reflexão Diária\n\n"
-    for cat, pergunta, resposta in dados["respostas"]:
-        corpo += f"📌 {cat}\n"
-        corpo += f"- {pergunta}\n"
-        corpo += f"  ✍️ {resposta}\n\n"
+async def schedule_cleanup(context: ContextTypes.DEFAULT_TYPE, user_id: int):
+    await asyncio.sleep(7200)  # 2 horas
+    messages = get_user_messages(user_id)
+    
+    for chat_id, message_id in messages:
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception as e:
+            logging.warning(f"Erro ao apagar mensagem: {e}")
+    
+    # Limpar banco de dados
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM messages WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM user_sessions WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
 
-    yag.send(
-        to=EMAIL_DESTINO,
-        subject="📩 Reflexão Diária - Aurora Bot",
-        contents=[corpo]
-    )
+async def cleanup_job(context: ContextTypes.DEFAULT_TYPE):
+    clean_old_messages()
 
-# Inicializar bot
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("refletir", start_reflexao))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receber_resposta))
-    print("🤖 Aurora está viva. Ctrl+C para parar.")
+    
+    # Agendar limpeza periódica
+    job_queue = app.job_queue
+    if job_queue:
+        job_queue.run_repeating(cleanup_job, interval=3600, first=10)  # A cada 1 hora
+    
+    print("🤖 Bot iniciado com sistema de auto-limpeza")
     app.run_polling()
 
 if __name__ == "__main__":
