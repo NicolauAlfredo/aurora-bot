@@ -78,6 +78,29 @@ PERGUNTAS = [
 # Dicionário para armazenar estado do utilizador
 user_data = {}
 
+# Mensagem de introdução ao bot
+INTRO_MSG = """
+👋 Olá! Eu sou o Aurora Bot, o seu assistente para reflexão diária. 
+Eu ajudo a organizar as suas reflexões, ajudar no autodesenvolvimento e enviar resumos por email.
+
+📝 O que faço:
+1. Eu guio você através de perguntas que ajudam na autoavaliação e no aperfeiçoamento pessoal.
+2. No final de cada reflexão, envio um resumo das suas respostas diretamente para o seu email.
+
+🎯 Comandos:
+- /refletir: Comece o seu processo de reflexão diária.
+- /ajuda: Se precisar de ajuda sobre como usar o bot, digite esse comando.
+
+🧭 Como funciona:
+- Responda às perguntas com sinceridade e atenção. 
+- Após completar as perguntas de reflexão, você receberá um resumo por email e orientações finais para reflexão escrita no seu caderno.
+"""
+
+# Início do comando /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Enviar mensagem de introdução
+    await update.message.reply_text(INTRO_MSG)
+
 # Início do comando /refletir
 async def start_reflexao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -144,6 +167,7 @@ def enviar_email(user_id):
 # Inicializar bot
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("refletir", start_reflexao))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receber_resposta))
     print("🤖 Aurora está viva. Ctrl+C para parar.")
